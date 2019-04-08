@@ -1,9 +1,13 @@
 package main
 
 import (
+	"crypto"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -11,12 +15,17 @@ import (
 )
 
 var (
-	pcapFile string = "Downloads/tls-capture-ecdhe-rsa-pkcs1-sha256.pcap"
+	pcapFile string
 	handle   *pcap.Handle
 	err      error
 )
 
 func main() {
+	if len(os.Args) < 2 {
+		panic("Need path to pcap file as first argument")
+	}
+
+	pcapFile = os.Args[1]
 	handle, err = pcap.OpenOffline(pcapFile)
 	if err != nil {
 		log.Fatal(err)
@@ -24,36 +33,37 @@ func main() {
 	defer handle.Close()
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	// count := 1
-	// for packet := range packetSource.Packets() {
-	// 	if isTLSPacket(packet) {
-	// 		// tls, _ := packet.ApplicationLayer().(*layers.TLS)
-	// 		// tls := packet.Layer(layers.LayerTypeTLS)
-	// 		// fmt.Printf("tls: %T, %v\n", tls, tls)
-	// 		fmt.Printf("packet %d is TLS:\n", count)
-	// 		fmt.Printf("%v\n", packet.ApplicationLayer().Payload())
-	// 	}
-	// 	count++
-	// }
-
 	packets := getPackets(packetSource.Packets())
+
 	clientRandom, serverRandom := findRandoms(packets)
-	fmt.Printf("clientRandom: ")
-	printSliceInHex(clientRandom)
-	fmt.Printf("serverRandom: ")
-	printSliceInHex(serverRandom)
+	// fmt.Printf("clientRandom: ")
+	// printSliceInHex(clientRandom)
+	// fmt.Printf("serverRandom: ")
+	// printSliceInHex(serverRandom)
 	// now find the signature key from the certificate
 	serverIP := getServerIP(packets)
 	// fmt.Printf("serverIP: %s\n", serverIP)
 	sigKey := getSigKey(packets, serverIP)
-	fmt.Printf("signature key: ")
-	printSliceInHex(sigKey)
+	rsaKey, ok := sigKey.(*rsa.PublicKey)
+	if !ok {
+		panic("couldn't parse sigKey as rsa key")
+	}
+	// fmt.Printf("signature key: ")
+	// fmt.Printf("%v\n", rsaKey)
 	pubKey, signature := getServerKeyAndSignature(packets, serverIP)
-	fmt.Printf("pubKey: ")
-	printSliceInHex(pubKey)
-	fmt.Printf("signature: ")
-	printSliceInHex(signature)
+	// fmt.Printf("pubKey: ")
+	// printSliceInHex(pubKey)
+	// fmt.Printf("signature: ")
+	// printSliceInHex(signature)
+	data := append(clientRandom, serverRandom...)
+	data = append(data, pubKey...)
+	hashed := sha256.Sum256(data)
 
+	err = rsa.VerifyPKCS1v15(rsaKey, crypto.SHA256, hashed[:], signature)
+	if err != nil {
+		panic("invalid signature")
+	}
+	fmt.Printf("valid signature\n")
 }
 
 func getServerKeyAndSignature(packets []gopacket.Packet, serverIP string) ([]byte, []byte) {
@@ -133,7 +143,6 @@ func getServerIP(packets []gopacket.Packet) string {
 	}
 
 	return s
-
 }
 
 func sliceToUint(s []byte) uint {
@@ -147,7 +156,7 @@ func sliceToUint(s []byte) uint {
 	return res
 }
 
-func getSigKey(packets []gopacket.Packet, serverIP string) []byte {
+func getSigKey(packets []gopacket.Packet, serverIP string) interface{} {
 	// step 1: find where certificate begins:
 	startInd, offset := findCertificatePacket(packets, serverIP)
 	// fmt.Printf("certificate starts in packet %d\n", startInd)
@@ -201,7 +210,15 @@ func getSigKey(packets []gopacket.Packet, serverIP string) []byte {
 		panic("Couldn't parse TCPCertPayload in to x509 certificate")
 	}
 
-	return cert.RawSubjectPublicKeyInfo
+	// return cert.RawSubjectPublicKeyInfo
+	// return cert.PublicKey
+	// fmt.Printf("type of key: %T\n", cert.PublicKey)
+	// rsaKey, err := x509.ParsePKCS1PublicKey(cert.RawSubjectPublicKeyInfo)
+	// if err != nil {
+	// 	panic("couldn't decode raw subject public key info into rsa key")
+	// }
+
+	return cert.PublicKey
 }
 
 func findServerKeyExchangePacket(packets []gopacket.Packet, serverIP string) (int, uint) {
@@ -338,6 +355,7 @@ func printSliceInHex(s []byte) {
 	fmt.Printf("\n")
 }
 
+// Finds the client and server randoms from TLS packets (assumes that client/server hellos are at the beginning of TCP packet)
 func findRandoms(packets []gopacket.Packet) ([]byte, []byte) {
 	var randoms [][]byte
 	for _, packet := range packets {
@@ -354,6 +372,7 @@ func findRandoms(packets []gopacket.Packet) ([]byte, []byte) {
 	return randoms[0], randoms[1]
 }
 
+// Finds the client/server random from a payload of a packet that has already been tessted to ensure it is a TLS packet
 func findRandom(payload []byte) []byte {
 	var ret []byte
 	if payload[0] != 0x01 && payload[0] != 0x02 {
@@ -374,8 +393,11 @@ func findRandom(payload []byte) []byte {
 	return ret
 }
 
+// Tests whether a given packet is a TLS packet by checking for an Application layer who's first byte is one of the
+// content-type bytes of TLS packets
 func isTLSPacket(packet gopacket.Packet) bool {
 	// slightly flawed idea, doesn't consider that TLS packets can spread out between multiple TCP packets
+	// only checks whether packet's payload is the beginning of a TLS packet
 	tlsLayer := packet.ApplicationLayer()
 
 	if tlsLayer != nil {
