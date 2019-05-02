@@ -8,7 +8,7 @@
 sudo apt install libelf-dev build-essential bison flex linux-headers-$(uname -r) libnuma-dev
 
 # pull the repo and submodule (PF_RING) repos
-git clone --recursive-submodules git@github.com:IanMartiny/ecdsa-attack.git
+git clone --recursive git@github.com:IanMartiny/ecdsa-attack.git
 
 # Build PF_RING
 cd PF_RING
