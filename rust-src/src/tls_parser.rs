@@ -53,7 +53,11 @@ pub fn parse_key_share(arr: &[u8]) -> Result<Vec<u8>, ParseError> {
 
 pub fn find_server_hello(a: &[u8], fl: &mut Flow) -> ServerHelloParseResult {
     let of = fl.overflow;
-    let record_type = a[of];
+    if a.len() < of {
+        return Err(ParseError::ShortBuffer);  // TODO: BUFF OVERFLOW ERROR HAPPENING HERE
+    }
+
+    let record_type = a[of];  // TODO: BUFF OVERFLOW
     if TlsRecordType::from_u8(record_type) != Some(TlsRecordType::Handshake) {
         return Err(ParseError::NotAHandshake);
     }
