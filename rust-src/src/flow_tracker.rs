@@ -86,7 +86,8 @@ impl FlowTracker {
             match ipv4_pkt.get_next_level_protocol() {
                 IpNextHeaderProtocols::Tcp => {
                     // taking not the whole payload is a work around PF_RING giving padding as data
-                    if let Some(tcp_pkt) = TcpPacket::new(&ipv4_pkt.payload()[0..((ipv4_pkt.get_total_length() as usize)-4*(ipv4_pkt.get_header_length() as usize))]) {
+                    //  ^^^ This was causing an overflow 
+                    if let Some(tcp_pkt) = TcpPacket::new(&ipv4_pkt.payload()) {
                         if ipv4_checksum(&tcp_pkt, &ipv4_pkt.get_source(), &ipv4_pkt.get_destination()) ==
                             tcp_pkt.get_checksum() || true {
                             self.handle_tcp_packet(
