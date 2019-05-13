@@ -6,7 +6,8 @@
 
 ```sh
 # Install dependencies
-sudo apt install libelf-dev build-essential bison pkg-config libpcap-dev flex linux-headers-$(uname -r) libnuma-dev
+sudo apt install libelf-dev build-essential bison pkg-config libpcap-dev \
+    flex linux-headers-$(uname -r) libnuma-dev
 
 # pull the repo and submodule (PF_RING) repos
 git clone --recursive git@github.com:IanMartiny/ecdsa-attack.git
@@ -29,7 +30,8 @@ Run simple version off local network interface.
 ```sh
 $ ./rust-src/target/release/tls_fingerprint --help
 TLS Fingerprint Debugger 1.0
-Reads from either PCAP or interface for debugging TLS fingerprint tool. Defaults to pcap if nothing is specified
+Reads from either PCAP or interface for debugging TLS fingerprint tool.Defaults
+to pcap if nothing is specified.
 
 USAGE:
     tls_fingerprint [-i INTERFACE] [-p FILE]

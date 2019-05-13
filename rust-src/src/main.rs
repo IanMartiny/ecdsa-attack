@@ -25,7 +25,7 @@ use flow_tracker::FlowTracker;
 fn main() {
     let cl_args = App::new("TLS Fingerprint Debugger")
         .about("Reads from either PCAP or interface for debugging TLS fingerprint \
-            tool. Defaults to pcap if nothing is specified")
+            tool. Defaults \nto pcap if nothing is specified.")
         .version("1.0")
         .arg(Arg::with_name("pcap")
             .short("p")
