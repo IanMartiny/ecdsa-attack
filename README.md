@@ -1,4 +1,4 @@
-# ECDSA Attack 
+# ECDSA Attack
 
 ### Rust PFRing integration
 
@@ -27,7 +27,22 @@ make
 Run simple version off local network interface.
 
 ```sh
-./rust-src/target/release/tls_fingerprint <interface name (i.e. eth0)>
+$ ./rust-src/target/release/tls_fingerprint --help
+TLS Fingerprint Debugger 1.0
+Reads from either PCAP or interface for debugging TLS fingerprint tool. Defaults to pcap if nothing is specified
+
+USAGE:
+    tls_fingerprint [-i INTERFACE] [-p FILE]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -i, --interface <INTERFACE>    Interface from which to read live packets
+    -p, --pcap <FILE>              Custom PCAP file to open
+
+$ ./rust-src/target/release/tls_fingerprint -i eth0
 ```
 
 ### Advanced
@@ -76,20 +91,20 @@ sudo ./load_driver.sh
 
 Start the ZC load balancer establishing cluster and queues to interface with.
 
-see the [docs](https://www.ntop.org/guides/pf_ring/rss.html?highlight=zbalance_ipc#zc-load-balancing-zbalance-ipc)
+See the [docs](https://www.ntop.org/guides/pf_ring/rss.html?highlight=zbalance_ipc#zc-load-balancing-zbalance-ipc)
 for more options
 
 ```sh
 cd PF_R/userland/examples_zc
 # sudo zbalance_ipc -i zc:eth1 -n $CORES -c $CLUSTER_NUM -g 1
-sudo zbalance_ipc -i zc:eth1 -n 2 -c 10 -g 1
+sudo ./zbalance_ipc -i zc:eth1 -n 2 -c 10 -g 1
 ```
 
--g is the core affinity for the capture/distribution thread
+**-g** is the core affinity for the capture/distribution thread
 
--c declares the ZC cluster ID
+**-c** declares the ZC cluster ID
 
--n specifies the number of egress queues
+**-n** specifies the number of egress queues
 
 #### 5. Run Application
 
@@ -100,13 +115,13 @@ Connect the `ecdsa-attack` parser to PF_RING and we're off!
 sudo ./tls-fingerprint -c 10 -n 2 -d "postgresql://user:secret@localhost/dbname" -m 0
 ```
 
--c specifies the ZC cluster ID
+**-c** specifies the ZC cluster ID
 
--n specifies the number of egress queues
+**-n** specifies the number of egress queues
 
--m cluster queue numeric offset
+**-m** cluster queue numeric offset
 
--d data source name for connecting to database
+**-d** data source name for connecting to database
 
 ## Useful RFC's
 

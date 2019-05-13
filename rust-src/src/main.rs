@@ -11,57 +11,97 @@ extern crate pcap;
 extern crate pnet;
 extern crate postgres;
 extern crate time;
+extern crate clap;
 
 use pnet::datalink::{self, NetworkInterface};
 use pnet::datalink::Channel::Ethernet;
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
-use std::env;
-use std::process;
 use std::time::{Instant, Duration};
+use std::error::Error;
 use pcap::Capture;
+use clap::{Arg, App};
 use flow_tracker::FlowTracker;
 
 fn main() {
-    if env::args().len() < 2 {
-        println!("Usage: ./tls_fingerprint interface_name");
-        process::exit(255);
-    }
-    let interface_name = env::args().nth(1).unwrap();
-    let interface_names_match = |iface: &NetworkInterface| iface.name == interface_name;
+    let cl_args = App::new("TLS Fingerprint Debugger")
+        .about("Reads from either PCAP or interface for debugging TLS fingerprint \
+            tool. Defaults to pcap if nothing is specified")
+        .version("1.0")
+        .arg(Arg::with_name("pcap")
+            .short("p")
+            .long("pcap")
+            .value_name("FILE")
+            .help("Custom PCAP file to open")
+            .takes_value(true))
+        .arg(Arg::with_name("interface")
+            .short("i")
+            .long("interface")
+            .value_name("INTERFACE")
+            .help("Interface from which to read live packets")
+            .takes_value(true))
+        .get_matches();
 
-    // Find the network interface with the provided name
-    let interfaces = datalink::interfaces();
-    let interface = interfaces
-        .into_iter()
-        .filter(interface_names_match)
-        .next()
-        .unwrap();
 
-    let mut ft = FlowTracker::new();
+    let pcap_filename = cl_args.value_of("pcap")
+        .unwrap_or("data/tls-capture-ecdhe-rsa-pkcs1-sha256.pcap.pcapng");
 
-    let from_pcap_file = true;
-    let pcap_filename = "data/tls-capture-ecdhe-rsa-pkcs1-sha256.pcap.pcapng";
-    if from_pcap_file {
-        let mut cap = Capture::from_file(pcap_filename) // open the "default" interface
-            .unwrap(); // assume activation worked
+    match cl_args.value_of("interface") {
+        Some(interface_name) => {
+            let interface_ref_closure = |iface: &NetworkInterface| iface.name == interface_name;
 
-        while let Ok(cap_pkt) = cap.next() {
-            let pnet_pkt = pnet::packet::ethernet::EthernetPacket::new(cap_pkt.data);
-            match pnet_pkt {
-                Some(eth_pkt) => {
-                    match eth_pkt.get_ethertype() {
-                        // EtherTypes::Vlan?
-                        EtherTypes::Ipv4 => ft.handle_ipv4_packet(&eth_pkt),
-                        EtherTypes::Ipv6 => ft.handle_ipv6_packet(&eth_pkt),
-                        _ => println!("[Warning] Could not parse packet"),
+            // Find the network interface with the provided name
+            let interfaces = datalink::interfaces();
+
+            match interfaces.into_iter().find(interface_ref_closure) {
+                Some (interface) => {
+                    run_from_interface( &interface);
+                },
+                None => {
+                    println!("Unknown interface '{}' reading from pcap.\n{}", 
+                        interface_name, pcap_filename);
+                    run_from_pcap(pcap_filename);
+                },
+            };
+        },
+        None => {
+            println!("No interface specified reading from pcap.\n{}", pcap_filename);
+            run_from_pcap(pcap_filename);
+        },
+    };
+}
+
+
+fn run_from_pcap(pcap_filename: &str){
+    match Capture::from_file(pcap_filename) {
+        Ok(mut cap)=> {
+            let mut ft = FlowTracker::new();
+            while let Ok(cap_pkt) = cap.next() {
+                let pnet_pkt = pnet::packet::ethernet::EthernetPacket::new(cap_pkt.data);
+                match pnet_pkt {
+                    Some(eth_pkt) => {
+                        match eth_pkt.get_ethertype() {
+                            // EtherTypes::Vlan?
+                            EtherTypes::Ipv4 => ft.handle_ipv4_packet(&eth_pkt),
+                            EtherTypes::Ipv6 => ft.handle_ipv6_packet(&eth_pkt),
+                            _ => println!("[Warning] Could not parse packet"),
+                        }
+                    }
+                    None => {
+                        println!("[Warning] Could not parse packet");
                     }
                 }
-                None => {
-                    println!("[Warning] Could not parse packet");
-                }
             }
-        }
-    } else {
+        },
+        Err(e) => {
+            println!("\nPCAP Parse error with file '{}'.", pcap_filename);
+            println!("Error => {}", e.description());
+        },
+    }
+}
+
+
+fn run_from_interface(interface: &NetworkInterface){
+    let mut ft = FlowTracker::new();
 
     // Create a new channel, dealing with layer 2 packets
     let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
@@ -106,6 +146,5 @@ fn main() {
                 println!("[ERROR] An error occurred while reading: {}", e);
             }
         }
-    }
     }
 }
