@@ -13,6 +13,7 @@ extern crate postgres;
 extern crate time;
 extern crate clap;
 
+use common::{check_dsn};
 use pnet::datalink::{self, NetworkInterface};
 use pnet::datalink::Channel::Ethernet;
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
@@ -82,7 +83,17 @@ fn run_from_pcap(pcap_filename: &str, data_source: Option<&str>){
     match Capture::from_file(pcap_filename) {
         Ok(mut cap)=> {
             let mut ft = match data_source {
-                Some(dsn) => FlowTracker::new_db(dsn.to_string(), 1, 1),
+                Some(dsn) => {
+                    let mut ft1 =  match check_dsn(dsn) {
+                        Ok(_) => FlowTracker::new_db(dsn.to_string(), 1, 1),
+                        Err(e) => {
+                            println!("[W] Unable to conenct to database - {}", e.description());
+                            println!("\t=>writing to terminal");
+                            FlowTracker::new()
+                        }
+                    };
+                    ft1
+                },
                 None => FlowTracker::new()
             };
 
@@ -113,7 +124,17 @@ fn run_from_pcap(pcap_filename: &str, data_source: Option<&str>){
 
 fn run_from_interface(interface: &NetworkInterface, data_source: Option<&str>){
     let mut ft = match data_source {
-        Some(dsn) => FlowTracker::new_db(dsn.to_string(), 1, 1),
+        Some(dsn) => {
+            let mut ft1 =  match check_dsn(dsn) {
+                Ok(_) => FlowTracker::new_db(dsn.to_string(), 1, 1),
+                Err(e) => {
+                    println!("[W] Unable to conenct to database - {}", e.description());
+                    println!("\t=> writing to terminal");
+                    FlowTracker::new()
+                }
+            };
+            ft1
+        },
         None => FlowTracker::new()
     };
 

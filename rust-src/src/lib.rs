@@ -26,6 +26,7 @@ use std::slice;
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 
 use flow_tracker::FlowTracker;
+// use common::check_dsn;
 
 #[no_mangle]
 pub extern "C" fn rust_process_packet(globals_ptr: *mut RustGlobalsStruct,
@@ -85,6 +86,8 @@ pub extern "C" fn rust_init(core_id: i8, cores_total: i32, dsn_ptr: *const c_cha
     let dsn_c_str: &CStr = unsafe { CStr::from_ptr(dsn_ptr) };
     let dsn_string: String = dsn_c_str.to_str().unwrap().to_owned();
 
+    // Abort early or notify if Database Connection fails
+    // check_dsn(dsn_string);  
     let ft = FlowTracker::new_db(dsn_string, core_id, cores_total);
     RustGlobalsStruct { ft: unsafe { transmute(Box::new(ft))}}
 }

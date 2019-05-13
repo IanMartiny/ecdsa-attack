@@ -7,6 +7,8 @@ use self::crypto::digest::Digest;
 
 use tls_structs::CipherSuite;
 
+use postgres::{Connection, TlsMode, Error};
+
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::time::Instant;
@@ -151,4 +153,11 @@ pub fn vec_u8_to_vec_u16_be(a: &Vec<u8>) -> Vec<u16> {
         result.push(u8_to_u16_be(a[2 * i], a[2 * i + 1]));
     }
     result
+}
+
+
+pub fn check_dsn(dsn: &str) -> Result<(), Error> {
+    let db_conn = Connection::connect(dsn, TlsMode::None)?;
+    db_conn.execute("SELECT 1", &[])?;
+    Ok(())
 }
