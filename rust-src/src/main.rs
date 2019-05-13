@@ -25,7 +25,8 @@ use flow_tracker::FlowTracker;
 fn main() {
     let cl_args = App::new("TLS Fingerprint Debugger")
         .about("Reads from either PCAP or interface for debugging TLS fingerprint \
-            tool. Defaults \nto pcap if nothing is specified.")
+            tool. Defaults \nto reading from pcap  and writing to terminal if no \
+            input or database respectively \nis specified.")
         .version("1.0")
         .arg(Arg::with_name("pcap")
             .short("p")
@@ -38,6 +39,12 @@ fn main() {
             .long("interface")
             .value_name("INTERFACE")
             .help("Interface from which to read live packets")
+            .takes_value(true))
+        .arg(Arg::with_name("database")
+            .short("d")
+            .long("database")
+            .value_name("DSN_URL")
+            .help("Enable write to database and use provided \ncredentials to connect to postgresql.")
             .takes_value(true))
         .get_matches();
 
@@ -54,27 +61,31 @@ fn main() {
 
             match interfaces.into_iter().find(interface_ref_closure) {
                 Some (interface) => {
-                    run_from_interface( &interface);
+                    run_from_interface( &interface, cl_args.value_of("database"));
                 },
                 None => {
                     println!("Unknown interface '{}' reading from pcap.\n{}", 
                         interface_name, pcap_filename);
-                    run_from_pcap(pcap_filename);
+                    run_from_pcap(pcap_filename, cl_args.value_of("database"));
                 },
             };
         },
         None => {
             println!("No interface specified reading from pcap.\n{}", pcap_filename);
-            run_from_pcap(pcap_filename);
+            run_from_pcap(pcap_filename, cl_args.value_of("database"));
         },
     };
 }
 
 
-fn run_from_pcap(pcap_filename: &str){
+fn run_from_pcap(pcap_filename: &str, data_source: Option<&str>){
     match Capture::from_file(pcap_filename) {
         Ok(mut cap)=> {
-            let mut ft = FlowTracker::new();
+            let mut ft = match data_source {
+                Some(dsn) => FlowTracker::new_db(dsn.to_string(), 1, 1),
+                None => FlowTracker::new()
+            };
+
             while let Ok(cap_pkt) = cap.next() {
                 let pnet_pkt = pnet::packet::ethernet::EthernetPacket::new(cap_pkt.data);
                 match pnet_pkt {
@@ -100,8 +111,11 @@ fn run_from_pcap(pcap_filename: &str){
 }
 
 
-fn run_from_interface(interface: &NetworkInterface){
-    let mut ft = FlowTracker::new();
+fn run_from_interface(interface: &NetworkInterface, data_source: Option<&str>){
+    let mut ft = match data_source {
+        Some(dsn) => FlowTracker::new_db(dsn.to_string(), 1, 1),
+        None => FlowTracker::new()
+    };
 
     // Create a new channel, dealing with layer 2 packets
     let (_, mut rx) = match datalink::channel(&interface, Default::default()) {

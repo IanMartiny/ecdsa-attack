@@ -27,22 +27,26 @@ make
 
 Run simple version off local network interface.
 
-```sh
+```
 $ ./rust-src/target/release/tls_fingerprint --help
 TLS Fingerprint Debugger 1.0
-Reads from either PCAP or interface for debugging TLS fingerprint tool.Defaults
-to pcap if nothing is specified.
+Reads from either PCAP or interface for debugging TLS fingerprint tool. Defaults 
+to reading from pcap  and writing to terminal if no input or database respectively 
+is specified.
 
 USAGE:
-    tls_fingerprint [-i INTERFACE] [-p FILE]
+    tls_fingerprint [-i INTERFACE | -p FILE] [-d DSN_URL]
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
+    -d, --database <DSN_URL>       Enable write to database and use provided 
+                                   credentials to connect to postgresql.
     -i, --interface <INTERFACE>    Interface from which to read live packets
     -p, --pcap <FILE>              Custom PCAP file to open
+
 
 $ ./rust-src/target/release/tls_fingerprint -i eth0
 ```
